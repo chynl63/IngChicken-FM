@@ -77,7 +77,7 @@ logging:
   project: "flow_policy_cl_libero_goal_sdft"
   log_interval: 50
   exp_name: ""
-  checkpoint_dir: "/home/cyhoaoen/IngChicken-FM/checkpoints/cl_goal_sdft"
-  results_dir: "/home/cyhoaoen/IngChicken-FM/results/cl_goal_sdft"
+  checkpoint_dir: "checkpoints/cl_goal_sdft"
+  results_dir: "results/cl_goal_sdft"
   use_wandb: false
   use_tensorboard: true

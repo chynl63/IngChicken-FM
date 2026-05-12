@@ -68,7 +68,7 @@ logging:
   project: "flow_policy_cl_libero_long"
   log_interval: 50
   exp_name: ""
-  checkpoint_dir: "/home/cyhoaoen/IngChicken-FM/checkpoints/cl_long"
-  results_dir: "/home/cyhoaoen/IngChicken-FM/results/cl_long"
+  checkpoint_dir: "checkpoints/cl_long"
+  results_dir: "results/cl_long"
   use_wandb: false
   use_tensorboard: true

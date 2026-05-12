@@ -51,6 +51,6 @@ logging:
   project: "flow_policy_libero90_pretrain"
   log_interval: 100
   save_interval: 10
-  checkpoint_dir: "/workspace/checkpoints/pretrain_fm"
+  checkpoint_dir: "checkpoints/pretrain_fm"
   use_wandb: false
   use_tensorboard: false

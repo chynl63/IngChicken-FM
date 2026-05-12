@@ -68,7 +68,7 @@ logging:
   project: "flow_policy_cl_libero_spatial"
   log_interval: 50
   exp_name: ""
-  checkpoint_dir: "/home/cyhoaoen/IngChicken-FM/checkpoints/cl_spatial"
-  results_dir: "/home/cyhoaoen/IngChicken-FM/results/cl_spatial"
+  checkpoint_dir: "checkpoints/cl_spatial"
+  results_dir: "results/cl_spatial"
   use_wandb: false
   use_tensorboard: true
