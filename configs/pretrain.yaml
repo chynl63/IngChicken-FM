@@ -1,0 +1,56 @@
+# Flow Matching Policy — LIBERO-90 pretraining
+
+seed: 42
+device: "cuda"
+
+data:
+  data_dir: "/workspace/data/libero90"
+  obs_horizon: 2
+  action_horizon: 16
+  action_dim: 7
+  batch_size: 64
+  num_workers: 4
+  samples_per_epoch: 50000
+  normalize_action: true
+  use_eye_in_hand: true
+  image_size: [128, 128]
+  obs_keys:
+    - "agentview_image"
+    - "robot0_eef_pos"
+    - "robot0_eef_quat"
+    - "robot0_gripper_qpos"
+
+vision_encoder:
+  type: "resnet18"
+  pretrained: true
+  feature_dim: 512
+  spatial_softmax: true
+  num_kp: 32
+
+# FM replaces the DDPM diffusion section
+flow_matching:
+  num_flow_steps: 10    # Euler steps at inference
+
+unet:
+  down_dims: [256, 512, 1024]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+
+training:
+  num_epochs: 500
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-6
+  lr_scheduler: "cosine"
+  lr_warmup_steps: 500
+  ema_decay: 0.995
+  gradient_clip: 1.0
+  mixed_precision: true
+
+logging:
+  project: "flow_policy_libero90_pretrain"
+  log_interval: 100
+  save_interval: 10
+  checkpoint_dir: "/workspace/checkpoints/pretrain_fm"
+  use_wandb: false
+  use_tensorboard: false
