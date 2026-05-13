@@ -15,11 +15,16 @@ import numpy as np
 
 
 def compute_nbt(perf_matrix: np.ndarray) -> float:
-    """Compute Negative Backward Transfer.
+    """Compute Normalized Negative Backward Transfer.
 
-    NBT = (1 / (N-1)) * sum_{j=0}^{N-2} [ max_{i in [j..N-1]} R_{i,j} - R_{N-1,j} ]
+    NBT_k = (1 / (K - k)) * sum_{tau=k+1}^{K} (c_{k,k} - c_{k,tau}) / (c_{k,k} + epsilon)
 
-    where R_{i,j} = performance on task j after training up to task i.
+    where c_{k,k} = perf_matrix[k, k] (SR just after learning task k),
+    c_{k,tau} = perf_matrix[tau, k] (SR on task k after training through task tau),
+    K = N-1 (last task index), epsilon = 1e-8.
+    The outer 1/(K-k) uses the count of valid (non-NaN) terms to handle missing entries.
+    Overall NBT is the mean of NBT_k over tasks with at least one subsequent evaluation.
+
     NBT > 0 indicates forgetting.
 
     Args:
@@ -31,18 +36,22 @@ def compute_nbt(perf_matrix: np.ndarray) -> float:
     if N <= 1:
         return 0.0
 
+    epsilon = 1e-8
     nbt_sum = 0.0
     count = 0
-    for j in range(N - 1):
-        valid_rows = [
-            perf_matrix[i, j] for i in range(j, N) if not np.isnan(perf_matrix[i, j])
-        ]
-        if len(valid_rows) < 2:
+
+    for k in range(N - 1):
+        c_kk = perf_matrix[k, k]
+        if np.isnan(c_kk):
             continue
-        best_past = max(valid_rows)
-        final = perf_matrix[N - 1, j]
-        if not np.isnan(final):
-            nbt_sum += best_past - final
+
+        terms = [
+            (c_kk - perf_matrix[tau, k]) / (c_kk + epsilon)
+            for tau in range(k + 1, N)
+            if not np.isnan(perf_matrix[tau, k])
+        ]
+        if terms:
+            nbt_sum += sum(terms) / len(terms)
             count += 1
 
     return nbt_sum / max(count, 1)
