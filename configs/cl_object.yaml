@@ -1,4 +1,4 @@
-# Flow Matching CL baseline (ER) — LIBERO-Object
+# Flow Matching CL baseline (PT+ER) — LIBERO-Object
 
 seed: 42
 device: "cuda"
@@ -71,5 +71,15 @@ logging:
   exp_name: ""
   checkpoint_dir: "checkpoints/cl_object"
   results_dir: "results/cl_object"
-  use_wandb: false
   use_tensorboard: true
+
+wandb:
+  enabled: true
+  entity: "ingchicken"
+  project: "baseline"
+  group: "object"
+  name: "pt-er_seed0"
+  tags:
+    - "object"
+    - "pt-er"
+  resume: "allow"

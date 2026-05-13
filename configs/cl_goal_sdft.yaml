@@ -79,5 +79,16 @@ logging:
   exp_name: ""
   checkpoint_dir: "checkpoints/cl_goal_sdft"
   results_dir: "results/cl_goal_sdft"
-  use_wandb: false
   use_tensorboard: true
+
+wandb:
+  enabled: true
+  entity: "ingchicken"
+  project: "sdft"
+  group: "goal"
+  name: "lambda0.3_seed0"
+  tags:
+    - "goal"
+    - "sdft-fm"
+    - "lambda0.3"
+  resume: "allow"

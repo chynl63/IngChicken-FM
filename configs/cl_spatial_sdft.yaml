@@ -79,5 +79,16 @@ logging:
   exp_name: ""
   checkpoint_dir: "checkpoints/cl_spatial_sdft"
   results_dir: "results/cl_spatial_sdft"
-  use_wandb: false
   use_tensorboard: true
+
+wandb:
+  enabled: true
+  entity: "ingchicken"
+  project: "sdft"
+  group: "spatial"
+  name: "lambda0.3_seed0"
+  tags:
+    - "spatial"
+    - "sdft-fm"
+    - "lambda0.3"
+  resume: "allow"

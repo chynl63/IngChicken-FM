@@ -52,5 +52,14 @@ logging:
   log_interval: 100
   save_interval: 10
   checkpoint_dir: "checkpoints/pretrain_fm"
-  use_wandb: false
   use_tensorboard: false
+
+wandb:
+  enabled: true
+  entity: "ingchicken"
+  project: "pretrain"
+  group: "pretrain"
+  name: "pretrain_seed0"
+  tags:
+    - "pretrain"
+  resume: "allow"

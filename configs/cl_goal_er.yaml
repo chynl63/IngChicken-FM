@@ -1,11 +1,11 @@
-# Flow Matching CL baseline (PT+ER) — LIBERO-Spatial
+# Flow Matching CL baseline (ER only) — LIBERO-Goal
 
 seed: 42
 device: "cuda"
 weights_dir: ""
 
 benchmark:
-  name: "libero_spatial"
+  name: "libero_goal"
   task_order_index: 0
   data_root: "/workspace/data"
 
@@ -65,20 +65,20 @@ replay:
   mix_ratio: 0.5
 
 logging:
-  project: "flow_policy_cl_libero_spatial"
+  project: "flow_policy_cl_libero_goal"
   log_interval: 50
   exp_name: ""
-  checkpoint_dir: "checkpoints/cl_spatial"
-  results_dir: "results/cl_spatial"
+  checkpoint_dir: "checkpoints/cl_goal_er"
+  results_dir: "results/cl_goal_er"
   use_tensorboard: true
 
 wandb:
   enabled: true
   entity: "ingchicken"
   project: "baseline"
-  group: "spatial"
-  name: "pt-er_seed0"
+  group: "goal"
+  name: "er-only_seed0"
   tags:
-    - "spatial"
-    - "pt-er"
+    - "goal"
+    - "er-only"
   resume: "allow"

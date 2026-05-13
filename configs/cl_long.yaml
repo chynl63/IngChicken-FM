@@ -1,4 +1,4 @@
-# Flow Matching CL baseline (ER) — LIBERO-Long
+# Flow Matching CL baseline (PT+ER) — LIBERO-Long
 
 seed: 42
 device: "cuda"
@@ -70,5 +70,15 @@ logging:
   exp_name: ""
   checkpoint_dir: "checkpoints/cl_long"
   results_dir: "results/cl_long"
-  use_wandb: false
   use_tensorboard: true
+
+wandb:
+  enabled: true
+  entity: "ingchicken"
+  project: "baseline"
+  group: "long"
+  name: "pt-er_seed0"
+  tags:
+    - "long"
+    - "pt-er"
+  resume: "allow"

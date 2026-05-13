@@ -1,4 +1,4 @@
-# Flow Matching CL baseline (ER) — LIBERO-Goal
+# Flow Matching CL baseline (PT+ER) — LIBERO-Goal
 
 seed: 42
 device: "cuda"
@@ -70,5 +70,15 @@ logging:
   exp_name: ""
   checkpoint_dir: "checkpoints/cl_goal"
   results_dir: "results/cl_goal"
-  use_wandb: false
   use_tensorboard: true
+
+wandb:
+  enabled: true
+  entity: "ingchicken"
+  project: "baseline"
+  group: "goal"
+  name: "pt-er_seed0"
+  tags:
+    - "goal"
+    - "pt-er"
+  resume: "allow"

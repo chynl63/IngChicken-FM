@@ -372,6 +372,84 @@ sdft:
 
 ---
 
+---
+
+## 📈 wandb Logging 설정
+
+공용 wandb 계정: **ingchicken**
+
+### 프로젝트 구조
+
+| project | 용도 |
+|---|---|
+| `pretrain` | LIBERO-90 FM pretraining |
+| `baseline` | PT / ER / PT+ER baseline 실험 |
+| `sdft` | FM-SDFT 실험 |
+
+**Group 기준**: suite (`object` / `spatial` / `goal` / `long`)
+
+### Run name 규칙
+
+| 조건 | 형식 | 예시 |
+|---|---|---|
+| baseline | `{condition}_seed{N}_{MMDD}` | `pt-er_seed0_0512` |
+| sdft | `lambda{λ}_seed{N}_{MMDD}` | `lambda0.3_seed0_0512` |
+| pretrain | `pretrain_seed{N}_{MMDD}` | `pretrain_seed0_0512` |
+
+> MMDD는 스크립트 실행 시점 날짜로 자동 생성됩니다.
+
+### 로그인 방법
+
+```bash
+wandb login  # ingchicken 계정 API key 입력
+```
+
+### wandb 비활성화 방법 (로컬 테스트 시)
+
+config 파일에서:
+
+```yaml
+wandb:
+  enabled: false
+```
+
+### train/eval logging 구조
+
+| prefix | 항목 | 설명 |
+|---|---|---|
+| `train/` | `train/loss` | task loss |
+| `train/` | `train/lr` | learning rate |
+| `train/` | `train/sdft_loss` | SDFT weighted loss (sdft 실험만) |
+| `train/` | `train/sdft_loss_v` | velocity space 원시 MSE (참고용, sdft 실험만) |
+| `eval/` | `eval/task{k}_sr` | task k의 success rate |
+| `eval/` | `eval/avg_sr` | 전체 평균 SR |
+| `eval/` | `eval/nbt` | Negative Backward Transfer |
+
+- train과 eval은 **같은 wandb run을 공유** (run_id로 연결)
+- step은 global_step 기준으로 train/eval 모두 통일
+
+### Config 파일 목록
+
+| config 파일 | 조건 | wandb project |
+|---|---|---|
+| `configs/pretrain.yaml` | Pretraining | `pretrain` |
+| `configs/cl_{suite}.yaml` | PT+ER baseline | `baseline` |
+| `configs/cl_{suite}_pt.yaml` | PT only | `baseline` |
+| `configs/cl_{suite}_er.yaml` | ER only | `baseline` |
+| `configs/cl_{suite}_sdft.yaml` | FM-SDFT | `sdft` |
+
+> `{suite}` = `object` / `spatial` / `goal` / `long`
+
+### AI agent를 위한 참고사항
+
+- 모든 wandb 설정은 config 파일의 `wandb` 필드에서 관리
+- `run_id`는 checkpoint에 함께 저장되어 `eval.py` 실행 시 자동으로 이어받음
+- step은 `global_step` 기준으로 train/eval 모두 통일
+- `train/sdft_loss_v`는 velocity space loss로 참고용으로만 logging (최적화에는 미사용)
+- `train/sdft_loss`는 weight가 적용된 실제 기여분 (`sdft_weight × sdft_loss_v`)
+
+---
+
 ## 📝 참고
 
 - **기반 코드:** [IngChicken](https://github.com/chynl63/IngChicken) (yerincho baseline + chaeyoon model + SDFT_FIX)

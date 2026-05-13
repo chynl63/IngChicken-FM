@@ -175,10 +175,29 @@ def train(cfg):
     use_amp = train_cfg.get("mixed_precision", True)
     scaler = GradScaler(enabled=use_amp)
 
-    use_wandb = log_cfg.get("use_wandb", False)
+    wandb_cfg = cfg.get("wandb", {})
+    use_wandb = wandb_cfg.get("enabled", False)
+    _wandb = None
+    wandb_run_id = None
     if use_wandb:
-        import wandb
-        wandb.init(project=log_cfg["project"], config=cfg)
+        try:
+            import wandb as _wandb
+            date_str = datetime.now().strftime("%m%d")
+            run_name = f"{wandb_cfg['name']}_{date_str}"
+            _wandb.init(
+                entity=wandb_cfg["entity"],
+                project=wandb_cfg["project"],
+                group=wandb_cfg.get("group"),
+                name=run_name,
+                tags=wandb_cfg.get("tags", []),
+                config=cfg,
+                resume=wandb_cfg.get("resume", "allow"),
+            )
+            wandb_run_id = _wandb.run.id
+            print(f"wandb run: {run_name}  (id={wandb_run_id})")
+        except ImportError:
+            print("wandb not available, disabling wandb logging")
+            use_wandb = False
 
     global_step = 0
     best_loss = float("inf")
@@ -212,8 +231,10 @@ def train(cfg):
             pbar.set_postfix(loss=f"{loss_val:.4f}", lr=f"{scheduler.get_last_lr()[0]:.2e}")
 
             if use_wandb and global_step % log_cfg.get("log_interval", 100) == 0:
-                wandb.log({"train/loss": loss_val, "train/lr": scheduler.get_last_lr()[0],
-                           "train/epoch": epoch, "train/global_step": global_step})
+                _wandb.log({
+                    "train/loss": loss_val,
+                    "train/lr": scheduler.get_last_lr()[0],
+                }, step=global_step)
             if tb_writer and global_step % log_cfg.get("log_interval", 100) == 0:
                 tb_writer.add_scalar("train/loss", loss_val, global_step)
                 tb_writer.add_scalar("train/lr", scheduler.get_last_lr()[0], global_step)
@@ -231,6 +252,7 @@ def train(cfg):
             "config": cfg,
             "action_mean": dataset.action_mean if hasattr(dataset, "action_mean") else None,
             "action_std": dataset.action_std if hasattr(dataset, "action_std") else None,
+            "wandb_run_id": wandb_run_id,
         }
 
         if (epoch + 1) % log_cfg.get("save_interval", 10) == 0:
@@ -248,6 +270,8 @@ def train(cfg):
     if tb_writer:
         tb_writer.flush()
         tb_writer.close()
+    if use_wandb:
+        _wandb.finish()
 
     print(f"\nTraining complete! Best loss: {best_loss:.4f}")
     print(f"Checkpoints saved to: {ckpt_dir}")

@@ -13,6 +13,7 @@ Usage (from repo root):
 import argparse
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -40,9 +41,34 @@ def main(args):
 
     action_mean = ckpt.get("action_mean")
     action_std = ckpt.get("action_std")
+    wandb_run_id = ckpt.get("wandb_run_id")
 
     print(f"Loaded checkpoint: {args.checkpoint}")
     print(f"  Task idx: {ckpt.get('task_idx', 'unknown')}")
+
+    # wandb resume
+    wandb_cfg = cfg.get("wandb", {})
+    use_wandb = wandb_cfg.get("enabled", False) and wandb_run_id is not None
+    if use_wandb:
+        try:
+            import wandb
+            date_str = datetime.now().strftime("%m%d")
+            run_name = f"{wandb_cfg.get('name', 'eval')}_{date_str}"
+            wandb.init(
+                entity=wandb_cfg["entity"],
+                project=wandb_cfg["project"],
+                group=wandb_cfg.get("group"),
+                name=run_name,
+                resume="must",
+                id=wandb_run_id,
+            )
+            print(f"wandb resumed run id={wandb_run_id}")
+        except ImportError:
+            print("wandb not available, disabling wandb logging")
+            use_wandb = False
+        except Exception as e:
+            print(f"wandb resume failed: {e}")
+            use_wandb = False
 
     # Build model
     model = FlowPolicy(cfg).to(device)
@@ -90,6 +116,13 @@ def main(args):
         print(f"  Task {task_idx:2d} ({task_names[task_idx][:40]}): SR = {sr:.4f}")
     avg_sr = np.mean(list(results.values()))
     print(f"\n  Average SR: {avg_sr:.4f}")
+
+    if use_wandb:
+        import wandb as _wandb
+        eval_log = {f"eval/task{k}_sr": float(sr) for k, sr in results.items()}
+        eval_log["eval/avg_sr"] = float(avg_sr)
+        _wandb.log(eval_log)
+        _wandb.finish()
 
     # Save results
     if args.output_dir:

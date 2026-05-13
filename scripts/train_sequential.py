@@ -194,6 +194,7 @@ def train_on_task(
     tb_writer=None,
     tb_global_step_offset: int = 0,
     replay_memory: ReplayMemory = None,
+    use_wandb: bool = False,
 ) -> tuple:
     data_cfg = cfg["data"]
     train_cfg = cfg["training"]
@@ -252,15 +253,6 @@ def train_on_task(
     use_amp = train_cfg.get("mixed_precision", True)
     scaler = GradScaler(enabled=use_amp)
 
-    use_wandb = log_cfg.get("use_wandb", False)
-    wandb_run = None
-    if use_wandb:
-        try:
-            import wandb
-            wandb_run = wandb
-        except ImportError:
-            use_wandb = False
-
     epoch_losses = []
     global_step = 0
 
@@ -294,13 +286,15 @@ def train_on_task(
             pbar.set_postfix(loss=f"{loss_val:.4f}", lr=f"{scheduler.get_last_lr()[0]:.2e}")
 
             if use_wandb and global_step % log_cfg.get("log_interval", 50) == 0:
-                wandb_run.log({f"task_{task_idx}/loss": loss_val,
-                               f"task_{task_idx}/lr": scheduler.get_last_lr()[0],
-                               "global_step": global_step})
+                import wandb as _wandb
+                _wandb.log({
+                    "train/loss": loss_val,
+                    "train/lr": scheduler.get_last_lr()[0],
+                }, step=tb_global_step_offset + global_step)
             if tb_writer and global_step % log_cfg.get("log_interval", 50) == 0:
                 tb_step = tb_global_step_offset + global_step
-                tb_writer.add_scalar(f"task_{task_idx}/train/loss", loss_val, tb_step)
-                tb_writer.add_scalar(f"task_{task_idx}/train/lr", scheduler.get_last_lr()[0], tb_step)
+                tb_writer.add_scalar("train/loss", loss_val, tb_step)
+                tb_writer.add_scalar("train/lr", scheduler.get_last_lr()[0], tb_step)
 
         avg_loss = np.mean(batch_losses)
         epoch_losses.append(avg_loss)
@@ -326,6 +320,29 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
     replay_cfg = cfg.get("replay", {})
     run_dir, ckpt_dir, results_dir = _prepare_run_dirs(cfg)
     tb_writer = _init_tensorboard_writer(cfg, results_dir)
+
+    wandb_cfg = cfg.get("wandb", {})
+    use_wandb = wandb_cfg.get("enabled", False)
+    wandb_run_id = None
+    if use_wandb:
+        try:
+            import wandb
+            date_str = datetime.now().strftime("%m%d")
+            run_name = f"{wandb_cfg['name']}_{date_str}"
+            wandb.init(
+                entity=wandb_cfg["entity"],
+                project=wandb_cfg["project"],
+                group=wandb_cfg.get("group"),
+                name=run_name,
+                tags=wandb_cfg.get("tags", []),
+                config=cfg,
+                resume=wandb_cfg.get("resume", "allow"),
+            )
+            wandb_run_id = wandb.run.id
+            print(f"wandb run: {run_name}  (id={wandb_run_id})")
+        except ImportError:
+            print("wandb not available, disabling wandb logging")
+            use_wandb = False
 
     replay_memory = None
     if replay_cfg.get("enabled", False):
@@ -387,7 +404,7 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
             model=model, task_idx=task_k, task_name=task_names[task_k],
             demo_path=demo_path, cfg=cfg, action_mean=action_mean, action_std=action_std,
             device=device, tb_writer=tb_writer, tb_global_step_offset=tb_global_step,
-            replay_memory=replay_memory,
+            replay_memory=replay_memory, use_wandb=use_wandb,
         )
         tb_global_step += task_steps
 
@@ -405,7 +422,7 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
         payload = {
             "task_idx": task_k, "task_name": task_names[task_k],
             "config": cfg, "action_mean": action_mean, "action_std": action_std,
-            "epoch_losses": epoch_losses,
+            "epoch_losses": epoch_losses, "wandb_run_id": wandb_run_id,
         }
         _save_checkpoint(ckpt_path, payload, model, ema, use_ema=False)
         _save_checkpoint(ema_ckpt_path, payload, model, ema, use_ema=True)
@@ -450,6 +467,14 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
             stage_log.update({"eval_time_s": eval_time, "avg_sr": float(avg_sr_stage),
                                "nbt": float(nbt_so_far),
                                "eval_results": {str(k): float(v) for k, v in eval_results.items()}})
+
+            if use_wandb:
+                import wandb as _wandb
+                eval_log = {f"eval/task{j}_sr": float(sr) for j, sr in eval_results.items()}
+                eval_log["eval/avg_sr"] = float(avg_sr_stage)
+                eval_log["eval/nbt"] = float(nbt_so_far)
+                _wandb.log(eval_log, step=tb_global_step)
+
             print(f"\n  --- Stage {task_k + 1} ---  Avg SR: {avg_sr_stage:.4f}  NBT: {nbt_so_far:.4f}")
         else:
             print("\n  [skip-eval] evaluation skipped")
@@ -485,6 +510,9 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
     if tb_writer:
         tb_writer.flush()
         tb_writer.close()
+    if use_wandb:
+        import wandb as _wandb
+        _wandb.finish()
 
 
 def _save_intermediate(perf_matrix, task_names, training_log, cfg, results_dir, task_k):

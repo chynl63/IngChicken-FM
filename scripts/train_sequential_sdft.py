@@ -247,6 +247,7 @@ def train_on_task(
     replay_memory: ReplayMemory = None,
     teacher: FlowPolicy = None,
     sdft_collected: list = None,
+    use_wandb: bool = False,
 ) -> tuple:
     data_cfg = cfg["data"]
     train_cfg = cfg["training"]
@@ -318,15 +319,6 @@ def train_on_task(
     scaler = GradScaler(enabled=use_amp)
     sdft_rng = random.Random(cfg.get("seed", 42) + task_idx)
 
-    use_wandb = log_cfg.get("use_wandb", False)
-    wandb_run = None
-    if use_wandb:
-        try:
-            import wandb
-            wandb_run = wandb
-        except ImportError:
-            use_wandb = False
-
     epoch_losses = []
     global_step = 0
 
@@ -351,9 +343,11 @@ def train_on_task(
                     sdft_batch = _sample_sdft_minibatch(
                         sdft_collected, sdft_batch_size, sdft_rng, device
                     )
-                    sdft_loss = compute_fm_sdft_loss(model, teacher, sdft_batch, sdft_num_steps)
-                    loss = task_loss + sdft_weight * sdft_loss
+                    sdft_loss_v = compute_fm_sdft_loss(model, teacher, sdft_batch, sdft_num_steps)
+                    sdft_loss = sdft_weight * sdft_loss_v
+                    loss = task_loss + sdft_loss
                 else:
+                    sdft_loss_v = None
                     sdft_loss = None
                     loss = task_loss
 
@@ -373,24 +367,26 @@ def train_on_task(
 
             postfix = {"loss": f"{loss_val:.4f}", "lr": f"{scheduler.get_last_lr()[0]:.2e}"}
             if sdft_enabled:
-                postfix["sdft"] = f"{sdft_loss.item():.4f}"
+                postfix["sdft"] = f"{sdft_loss_v.item():.4f}"
             pbar.set_postfix(**postfix)
 
             if use_wandb and global_step % log_cfg.get("log_interval", 50) == 0:
-                log_dict = {f"task_{task_idx}/loss": loss_val,
-                            f"task_{task_idx}/lr": scheduler.get_last_lr()[0],
-                            "global_step": global_step}
+                import wandb as _wandb
+                log_dict = {
+                    "train/loss": loss_val,
+                    "train/lr": scheduler.get_last_lr()[0],
+                }
                 if sdft_enabled:
-                    log_dict[f"task_{task_idx}/sdft_loss"] = sdft_loss.item()
-                    log_dict[f"task_{task_idx}/task_loss"] = task_loss.item()
-                wandb_run.log(log_dict)
+                    log_dict["train/sdft_loss"] = sdft_loss.item()
+                    log_dict["train/sdft_loss_v"] = sdft_loss_v.item()
+                _wandb.log(log_dict, step=tb_global_step_offset + global_step)
             if tb_writer and global_step % log_cfg.get("log_interval", 50) == 0:
                 tb_step = tb_global_step_offset + global_step
-                tb_writer.add_scalar(f"task_{task_idx}/train/loss", loss_val, tb_step)
-                tb_writer.add_scalar(f"task_{task_idx}/train/lr", scheduler.get_last_lr()[0], tb_step)
+                tb_writer.add_scalar("train/loss", loss_val, tb_step)
+                tb_writer.add_scalar("train/lr", scheduler.get_last_lr()[0], tb_step)
                 if sdft_enabled:
-                    tb_writer.add_scalar(f"task_{task_idx}/train/sdft_loss", sdft_loss.item(), tb_step)
-                    tb_writer.add_scalar(f"task_{task_idx}/train/task_loss", task_loss.item(), tb_step)
+                    tb_writer.add_scalar("train/sdft_loss", sdft_loss.item(), tb_step)
+                    tb_writer.add_scalar("train/sdft_loss_v", sdft_loss_v.item(), tb_step)
 
         avg_loss = np.mean(batch_losses)
         epoch_losses.append(avg_loss)
@@ -417,6 +413,29 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
     sdft_cfg = cfg.get("sdft", {})
     run_dir, ckpt_dir, results_dir = _prepare_run_dirs(cfg)
     tb_writer = _init_tensorboard_writer(cfg, results_dir)
+
+    wandb_cfg = cfg.get("wandb", {})
+    use_wandb = wandb_cfg.get("enabled", False)
+    wandb_run_id = None
+    if use_wandb:
+        try:
+            import wandb
+            date_str = datetime.now().strftime("%m%d")
+            run_name = f"{wandb_cfg['name']}_{date_str}"
+            wandb.init(
+                entity=wandb_cfg["entity"],
+                project=wandb_cfg["project"],
+                group=wandb_cfg.get("group"),
+                name=run_name,
+                tags=wandb_cfg.get("tags", []),
+                config=cfg,
+                resume=wandb_cfg.get("resume", "allow"),
+            )
+            wandb_run_id = wandb.run.id
+            print(f"wandb run: {run_name}  (id={wandb_run_id})")
+        except ImportError:
+            print("wandb not available, disabling wandb logging")
+            use_wandb = False
 
     replay_memory = None
     if replay_cfg.get("enabled", False):
@@ -505,6 +524,7 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
             demo_path=demo_path, cfg=cfg, action_mean=action_mean, action_std=action_std,
             device=device, tb_writer=tb_writer, tb_global_step_offset=tb_global_step,
             replay_memory=replay_memory, teacher=teacher, sdft_collected=sdft_collected,
+            use_wandb=use_wandb,
         )
         tb_global_step += task_steps
 
@@ -527,7 +547,7 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
         payload = {
             "task_idx": task_k, "task_name": task_names[task_k],
             "config": cfg, "action_mean": action_mean, "action_std": action_std,
-            "epoch_losses": epoch_losses,
+            "epoch_losses": epoch_losses, "wandb_run_id": wandb_run_id,
         }
         _save_checkpoint(ckpt_path, payload, model, ema, use_ema=False)
         _save_checkpoint(ema_ckpt_path, payload, model, ema, use_ema=True)
@@ -576,6 +596,14 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
                 "nbt": float(nbt_so_far),
                 "eval_results": {str(k): float(v) for k, v in eval_results.items()},
             })
+
+            if use_wandb:
+                import wandb as _wandb
+                eval_log = {f"eval/task{j}_sr": float(sr) for j, sr in eval_results.items()}
+                eval_log["eval/avg_sr"] = float(avg_sr_stage)
+                eval_log["eval/nbt"] = float(nbt_so_far)
+                _wandb.log(eval_log, step=tb_global_step)
+
             print(f"\n  --- Stage {task_k + 1} ---  "
                   f"Avg SR: {avg_sr_stage:.4f}  NBT: {nbt_so_far:.4f}")
         else:
@@ -612,6 +640,9 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
     if tb_writer:
         tb_writer.flush()
         tb_writer.close()
+    if use_wandb:
+        import wandb as _wandb
+        _wandb.finish()
 
 
 def _save_intermediate(perf_matrix, task_names, training_log, cfg, results_dir, task_k):
