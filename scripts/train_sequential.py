@@ -417,6 +417,49 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None, start_task: int = 0):
                 training_log = json.load(f).get("training_log", [])
             print(f"Loaded training_log ({len(training_log)} entries)")
 
+        # Backfill eval for any previously trained task whose eval row is missing
+        if not skip_eval:
+            for k in range(start_task):
+                if not np.all(np.isnan(perf_matrix[k, :k + 1])):
+                    continue  # already have results
+                past_ckpt = ckpt_dir / f"after_task_{k:02d}_ema.pt"
+                if not past_ckpt.exists():
+                    continue
+                print(f"\n  [resume] Backfilling missed eval for task {k} ({past_ckpt.name})")
+                past_data = torch.load(past_ckpt, map_location=device, weights_only=False)
+                eval_model = FlowPolicy(cfg).to(device)
+                eval_model.load_state_dict(past_data["model_state_dict"], strict=True)
+                eval_model.eval()
+                eval_results = evaluate_checkpoint_on_all_tasks(
+                    model=eval_model, benchmark=benchmark,
+                    task_indices=list(range(k + 1)),
+                    num_episodes=eval_cfg.get("num_episodes", 20),
+                    max_steps=eval_cfg.get("max_steps_per_episode", 600),
+                    action_execution_horizon=eval_cfg.get("action_execution_horizon", 8),
+                    action_mean=action_mean if data_cfg.get("normalize_action", True) else None,
+                    action_std=action_std if data_cfg.get("normalize_action", True) else None,
+                    obs_horizon=data_cfg["obs_horizon"],
+                    image_size=tuple(data_cfg.get("image_size", [128, 128])),
+                    use_eye_in_hand=data_cfg.get("use_eye_in_hand", True),
+                    low_dim_keys=low_dim_keys, device=device,
+                    use_ddim=False,
+                    ddim_steps=eval_cfg.get("num_flow_steps", 10),
+                    seed=seed,
+                )
+                del eval_model
+                for j, sr in eval_results.items():
+                    perf_matrix[k, j] = sr
+                avg_sr_k = float(np.nanmean(perf_matrix[k, :k + 1]))
+                nbt_k = float(compute_nbt(perf_matrix[:k + 1, :k + 1]))
+                print(f"  [resume] Task {k} eval done — Avg SR: {avg_sr_k:.4f}  NBT: {nbt_k:.4f}")
+                if use_wandb:
+                    import wandb as _wandb
+                    eval_log = {f"eval/task{j}_sr": float(sr) for j, sr in eval_results.items()}
+                    eval_log["eval/avg_sr"] = avg_sr_k
+                    eval_log["eval/nbt"] = nbt_k
+                    _wandb.log(eval_log, step=past_data.get("tb_global_step", 0))
+            _save_intermediate(perf_matrix, task_names, training_log, cfg, results_dir, start_task - 1)
+
     for task_k in range(start_task, n_tasks):
         print("\n" + "=" * 70)
         print(f"STAGE {task_k + 1}/{n_tasks}: Task {task_k}  —  {task_names[task_k]}")
