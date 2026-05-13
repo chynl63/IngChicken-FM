@@ -15,9 +15,9 @@ import numpy as np
 
 
 def compute_nbt(perf_matrix: np.ndarray) -> float:
-    """Compute Normalized Negative Backward Transfer.
+    """Compute Exponential Normalized Negative Backward Transfer.
 
-    NBT_k = (1 / (K - k)) * sum_{tau=k+1}^{K} (c_{k,k} - c_{k,tau}) / (c_{k,k} + epsilon)
+    NBT_k = (1 / (K - k)) * sum_{tau=k+1}^{K} (exp((c_{k,k} - c_{k,tau}) / (c_{k,k} + epsilon)) - 1)
 
     where c_{k,k} = perf_matrix[k, k] (SR just after learning task k),
     c_{k,tau} = perf_matrix[tau, k] (SR on task k after training through task tau),
@@ -46,7 +46,7 @@ def compute_nbt(perf_matrix: np.ndarray) -> float:
             continue
 
         terms = [
-            (c_kk - perf_matrix[tau, k]) / (c_kk + epsilon)
+            np.exp((c_kk - perf_matrix[tau, k]) / (c_kk + epsilon)) - 1
             for tau in range(k + 1, N)
             if not np.isnan(perf_matrix[tau, k])
         ]
