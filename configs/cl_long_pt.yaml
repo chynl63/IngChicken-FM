@@ -1,11 +1,11 @@
-# Flow Matching CL baseline (PT only) — LIBERO-Long
+# Flow Matching CL baseline (Naive — no pretrain, no ER) — LIBERO-10
 
 seed: 42
 device: "cuda"
 weights_dir: ""
 
 benchmark:
-  name: "libero_long"
+  name: "libero_10"
   task_order_index: 0
   data_root: "/home/cyhoaoen/IngChicken-FM/data"
 
@@ -77,8 +77,8 @@ wandb:
   entity: "ingchicken"
   project: "baseline"
   group: "long"
-  name: "pt-only_seed0"
+  name: "naive_seed0"
   tags:
     - "long"
-    - "pt-only"
+    - "naive"
   resume: "allow"

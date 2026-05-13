@@ -1,4 +1,4 @@
-# Flow Matching CL baseline (PT only) — LIBERO-Spatial
+# Flow Matching CL baseline (Naive — no pretrain, no ER) — LIBERO-Spatial
 
 seed: 42
 device: "cuda"
@@ -77,8 +77,8 @@ wandb:
   entity: "ingchicken"
   project: "baseline"
   group: "spatial"
-  name: "pt-only_seed0"
+  name: "naive_seed0"
   tags:
     - "spatial"
-    - "pt-only"
+    - "naive"
   resume: "allow"
