@@ -154,7 +154,7 @@ def main(cfg, task_indices: list):
         if use_wandb:
             import wandb as _wandb
             step = ckpt_data.get("tb_global_step", 0)
-            log = {f"eval/task{j}_sr": float(sr) for j, sr in eval_results.items()}
+            log = {f"eval/task{j}/sr": float(sr) for j, sr in eval_results.items()}
             log["eval/avg_sr"] = avg_sr
             log["eval/nbt"] = nbt
             _wandb.log(log, step=step)

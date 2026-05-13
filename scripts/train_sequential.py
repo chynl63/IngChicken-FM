@@ -266,9 +266,12 @@ def train_on_task(
 
             optimizer.zero_grad()
             scaler.scale(loss).backward()
+            grad_norm = None
             if train_cfg.get("gradient_clip", 0) > 0:
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), train_cfg["gradient_clip"])
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), train_cfg["gradient_clip"]
+                ).item()
             scaler.step(optimizer)
             scaler.update()
             scheduler.step()
@@ -281,10 +284,13 @@ def train_on_task(
 
             if use_wandb and global_step % log_cfg.get("log_interval", 50) == 0:
                 import wandb as _wandb
-                _wandb.log({
+                log_dict = {
                     f"train/task{task_idx}/loss": loss_val,
                     f"train/task{task_idx}/lr": scheduler.get_last_lr()[0],
-                }, step=tb_global_step_offset + global_step)
+                }
+                if grad_norm is not None:
+                    log_dict[f"train/task{task_idx}/grad_norm"] = grad_norm
+                _wandb.log(log_dict, step=tb_global_step_offset + global_step)
             if tb_writer and global_step % log_cfg.get("log_interval", 50) == 0:
                 tb_step = tb_global_step_offset + global_step
                 tb_writer.add_scalar("train/loss", loss_val, tb_step)
