@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Sequential Continual Learning with Experience Replay (ER) — FM version.
+Sequential Continual Learning — FM version (train only).
 
 Trains FlowPolicy sequentially across N tasks with an optional replay buffer.
-No SDFT; for SDFT use train_sequential_sdft.py.
+Evaluation is handled separately by scripts/eval_sequential.py.
 
 Usage (from repo root):
-  python -m scripts.train_sequential \
-      --config configs/cl_object.yaml [--skip-eval]
+  python -m scripts.train_sequential --config configs/cl_object_pt.yaml
+  python -m scripts.train_sequential --config configs/cl_object_pt.yaml --start-task 2
 """
 
 import os
@@ -26,21 +26,10 @@ from tqdm import tqdm
 
 from model.flow_policy import FlowPolicy, EMAModel
 from scripts.datasets import (
-    SingleTaskDataset,
     create_single_task_dataloader,
     compute_global_action_stats,
 )
 from scripts.utils_er import ReplayMemory, cycle, merge_batches, split_batch_size
-from scripts.evaluation import (
-    evaluate_checkpoint_on_all_tasks,
-    compute_nbt,
-    compute_average_sr,
-    compute_average_sr_per_stage,
-    save_results_json,
-    save_results_csv,
-    plot_performance_matrix,
-    plot_forgetting_summary,
-)
 
 from libero.libero.benchmark import get_benchmark
 
@@ -148,6 +137,11 @@ def _save_checkpoint(path: Path, payload: dict, model: FlowPolicy, ema: EMAModel
     checkpoint["model_state_dict"] = ema.state_dict() if use_ema else model.state_dict()
     checkpoint["ema_state_dict"] = ema.state_dict()
     torch.save(checkpoint, path)
+
+
+def _save_training_log(training_log: list, results_dir: Path):
+    with open(results_dir / "training_log.json", "w") as f:
+        json.dump({"training_log": training_log}, f, indent=2, default=str)
 
 
 def verify_task_names(benchmark, benchmark_name: str):
@@ -308,7 +302,7 @@ def train_on_task(
 # Main
 # ---------------------------------------------------------------------------
 
-def main(cfg, skip_eval=False, pretrain_ckpt=None, start_task: int = 0):
+def main(cfg, pretrain_ckpt=None, start_task: int = 0):
     device = torch.device(cfg.get("device", "cuda"))
     seed = cfg.get("seed", 42)
     torch.manual_seed(seed)
@@ -316,7 +310,6 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None, start_task: int = 0):
 
     benchmark_cfg = cfg["benchmark"]
     data_cfg = cfg["data"]
-    eval_cfg = cfg["evaluation"]
     replay_cfg = cfg.get("replay", {})
     run_dir, ckpt_dir, results_dir = _prepare_run_dirs(cfg)
     tb_writer = _init_tensorboard_writer(cfg, results_dir)
@@ -380,14 +373,14 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None, start_task: int = 0):
 
     print("\nBuilding Flow Matching Policy...")
     model = FlowPolicy(cfg).to(device)
-    init_weights_path = _load_initial_weights(model, cfg, device)
+    _load_initial_weights(model, cfg, device)
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model parameters: {param_count:,}")
 
     if resume_ckpt_data is not None:
         model.load_state_dict(resume_ckpt_data["model_state_dict"], strict=True)
         cfg["training"]["_effective_lr"] = cfg["training"]["learning_rate"]
-        print(f"Model weights loaded from resume checkpoint.")
+        print("Model weights loaded from resume checkpoint.")
     elif pretrain_ckpt is not None:
         print(f"\nLoading pretrained weights from: {pretrain_ckpt}")
         ckpt = torch.load(pretrain_ckpt, map_location=device, weights_only=False)
@@ -400,65 +393,15 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None, start_task: int = 0):
         cfg["training"]["_effective_lr"] = cfg["training"]["learning_rate"]
     print()
 
-    perf_matrix = np.full((n_tasks, n_tasks), np.nan)
     training_log = []
     tb_global_step = resume_ckpt_data.get("tb_global_step", 0) if resume_ckpt_data else 0
-    low_dim_keys = [k for k in data_cfg["obs_keys"] if "image" not in k]
 
     if start_task > 0:
-        inter_path = results_dir / "perf_matrix_intermediate.npy"
-        if inter_path.exists():
-            saved = np.load(inter_path)
-            perf_matrix[:saved.shape[0], :saved.shape[1]] = saved
-            print(f"Loaded perf_matrix from {inter_path}")
         log_path = results_dir / "training_log.json"
         if log_path.exists():
             with open(log_path) as f:
                 training_log = json.load(f).get("training_log", [])
             print(f"Loaded training_log ({len(training_log)} entries)")
-
-        # Backfill eval for any previously trained task whose eval row is missing
-        if not skip_eval:
-            for k in range(start_task):
-                if not np.all(np.isnan(perf_matrix[k, :k + 1])):
-                    continue  # already have results
-                past_ckpt = ckpt_dir / f"after_task_{k:02d}_ema.pt"
-                if not past_ckpt.exists():
-                    continue
-                print(f"\n  [resume] Backfilling missed eval for task {k} ({past_ckpt.name})")
-                past_data = torch.load(past_ckpt, map_location=device, weights_only=False)
-                eval_model = FlowPolicy(cfg).to(device)
-                eval_model.load_state_dict(past_data["model_state_dict"], strict=True)
-                eval_model.eval()
-                eval_results = evaluate_checkpoint_on_all_tasks(
-                    model=eval_model, benchmark=benchmark,
-                    task_indices=list(range(k + 1)),
-                    num_episodes=eval_cfg.get("num_episodes", 20),
-                    max_steps=eval_cfg.get("max_steps_per_episode", 600),
-                    action_execution_horizon=eval_cfg.get("action_execution_horizon", 8),
-                    action_mean=action_mean if data_cfg.get("normalize_action", True) else None,
-                    action_std=action_std if data_cfg.get("normalize_action", True) else None,
-                    obs_horizon=data_cfg["obs_horizon"],
-                    image_size=tuple(data_cfg.get("image_size", [128, 128])),
-                    use_eye_in_hand=data_cfg.get("use_eye_in_hand", True),
-                    low_dim_keys=low_dim_keys, device=device,
-                    use_ddim=False,
-                    ddim_steps=eval_cfg.get("num_flow_steps", 10),
-                    seed=seed,
-                )
-                del eval_model
-                for j, sr in eval_results.items():
-                    perf_matrix[k, j] = sr
-                avg_sr_k = float(np.nanmean(perf_matrix[k, :k + 1]))
-                nbt_k = float(compute_nbt(perf_matrix[:k + 1, :k + 1]))
-                print(f"  [resume] Task {k} eval done — Avg SR: {avg_sr_k:.4f}  NBT: {nbt_k:.4f}")
-                if use_wandb:
-                    import wandb as _wandb
-                    eval_log = {f"eval/task{j}_sr": float(sr) for j, sr in eval_results.items()}
-                    eval_log["eval/avg_sr"] = avg_sr_k
-                    eval_log["eval/nbt"] = nbt_k
-                    _wandb.log(eval_log, step=past_data.get("tb_global_step", 0))
-            _save_intermediate(perf_matrix, task_names, training_log, cfg, results_dir, start_task - 1)
 
     for task_k in range(start_task, n_tasks):
         print("\n" + "=" * 70)
@@ -498,85 +441,21 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None, start_task: int = 0):
         _save_checkpoint(ema_ckpt_path, payload, model, ema, use_ema=True)
         print(f"  Checkpoint: {ckpt_path}")
 
-        stage_log = {
+        training_log.append({
             "task_idx": task_k, "task_name": task_names[task_k],
             "train_time_s": train_time, "final_train_loss": float(epoch_losses[-1]),
-        }
-
-        if not skip_eval:
-            print(f"\n  Evaluating on tasks 0..{task_k}:")
-            eval_model = ema.model
-            eval_model.eval()
-
-            t_eval = time.time()
-            eval_results = evaluate_checkpoint_on_all_tasks(
-                model=eval_model, benchmark=benchmark,
-                task_indices=list(range(task_k + 1)),
-                num_episodes=eval_cfg.get("num_episodes", 20),
-                max_steps=eval_cfg.get("max_steps_per_episode", 600),
-                action_execution_horizon=eval_cfg.get("action_execution_horizon", 8),
-                action_mean=action_mean if data_cfg.get("normalize_action", True) else None,
-                action_std=action_std if data_cfg.get("normalize_action", True) else None,
-                obs_horizon=data_cfg["obs_horizon"],
-                image_size=tuple(data_cfg.get("image_size", [128, 128])),
-                use_eye_in_hand=data_cfg.get("use_eye_in_hand", True),
-                low_dim_keys=low_dim_keys, device=device,
-                use_ddim=False,  # FM uses Euler integration via sample_action()
-                ddim_steps=eval_cfg.get("num_flow_steps", 10),
-                seed=seed,
-                save_video=eval_cfg.get("save_video", False),
-                video_dir=str(results_dir / "videos" / f"stage_{task_k:02d}"),
-            )
-            eval_time = time.time() - t_eval
-
-            for task_j, sr in eval_results.items():
-                perf_matrix[task_k, task_j] = sr
-
-            avg_sr_stage = np.nanmean(perf_matrix[task_k, : task_k + 1])
-            nbt_so_far = compute_nbt(perf_matrix[: task_k + 1, : task_k + 1])
-            stage_log.update({"eval_time_s": eval_time, "avg_sr": float(avg_sr_stage),
-                               "nbt": float(nbt_so_far),
-                               "eval_results": {str(k): float(v) for k, v in eval_results.items()}})
-
-            if use_wandb:
-                import wandb as _wandb
-                eval_log = {f"eval/task{j}_sr": float(sr) for j, sr in eval_results.items()}
-                eval_log["eval/avg_sr"] = float(avg_sr_stage)
-                eval_log["eval/nbt"] = float(nbt_so_far)
-                _wandb.log(eval_log, step=tb_global_step)
-
-            print(f"\n  --- Stage {task_k + 1} ---  Avg SR: {avg_sr_stage:.4f}  NBT: {nbt_so_far:.4f}")
-        else:
-            print("\n  [skip-eval] evaluation skipped")
-
-        training_log.append(stage_log)
-        _save_intermediate(perf_matrix, task_names, training_log, cfg, results_dir, task_k)
-
-    # Final metrics
-    run_meta = {
-        "end_time": datetime.now().isoformat(), "config": cfg,
-        "n_tasks": n_tasks, "task_names": task_names, "param_count": param_count,
-        "training_log": training_log,
-    }
-
-    if not skip_eval:
-        nbt_final = compute_nbt(perf_matrix)
-        avg_sr_final = compute_average_sr(perf_matrix)
-        print(f"\nFINAL: Avg SR = {avg_sr_final:.4f}  |  NBT = {nbt_final:.4f}")
-        run_meta["nbt"] = float(nbt_final)
-        run_meta["avg_sr_final"] = float(avg_sr_final)
-        save_results_json(perf_matrix, task_names, nbt_final, avg_sr_final, cfg,
-                          str(results_dir / "results.json"))
-        save_results_csv(perf_matrix, task_names, str(results_dir / "perf_matrix.csv"))
-        np.save(results_dir / "perf_matrix.npy", perf_matrix)
-        plot_performance_matrix(perf_matrix, task_names, str(results_dir / "heatmap.png"),
-                                benchmark_name=benchmark_cfg.get("name"))
-        plot_forgetting_summary(perf_matrix, task_names, str(results_dir / "forgetting_summary.png"))
+        })
+        _save_training_log(training_log, results_dir)
 
     with open(results_dir / "run_meta.json", "w") as f:
-        json.dump(run_meta, f, indent=2, default=str)
+        json.dump({
+            "end_time": datetime.now().isoformat(), "config": cfg,
+            "n_tasks": n_tasks, "task_names": task_names, "param_count": param_count,
+            "training_log": training_log,
+        }, f, indent=2, default=str)
 
-    print(f"\nAll results saved to: {results_dir}")
+    print(f"\nTraining complete. Checkpoints: {ckpt_dir}")
+    print(f"Run eval with:  python -m scripts.eval_sequential --config <config> --all")
     if tb_writer:
         tb_writer.flush()
         tb_writer.close()
@@ -585,26 +464,13 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None, start_task: int = 0):
         _wandb.finish()
 
 
-def _save_intermediate(perf_matrix, task_names, training_log, cfg, results_dir, task_k):
-    np.save(results_dir / "perf_matrix_intermediate.npy", perf_matrix)
-    nbt = compute_nbt(perf_matrix[: task_k + 1, : task_k + 1])
-    avg_sr = np.nanmean(perf_matrix[task_k, : task_k + 1])
-    save_results_json(perf_matrix, task_names, nbt, avg_sr, cfg,
-                      str(results_dir / "results_intermediate.json"))
-    with open(results_dir / "training_log.json", "w") as f:
-        json.dump({"completed_tasks": task_k + 1, "training_log": training_log},
-                  f, indent=2, default=str)
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
-    parser.add_argument("--skip-eval", action="store_true")
     parser.add_argument("--pretrain-ckpt", type=str, default=None)
     parser.add_argument("--start-task", type=int, default=0,
-                        help="Resume from this task index (loads after_task_{N-1}_ema.pt)")
+                        help="Resume training from this task index (loads after_task_{N-1}_ema.pt)")
     args = parser.parse_args()
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
-    main(cfg, skip_eval=args.skip_eval, pretrain_ckpt=args.pretrain_ckpt,
-         start_task=args.start_task)
+    main(cfg, pretrain_ckpt=args.pretrain_ckpt, start_task=args.start_task)

@@ -42,19 +42,13 @@ export CUDA_VISIBLE_DEVICES="\${GPU_DEVICE:-0}"
 exec singularity exec --nv --writable-tmpfs \\
   --bind ${BASE}:/workspace \\
   --bind /home/cyhoaoen:/home/cyhoaoen \\
-  --bind ${BASE}/LIBERO:/workspace/LIBERO \\
   "${SIF_IMAGE}" \\
   bash -lc '
     set -euo pipefail
     cd /workspace
     source /workspace/scripts/singularity/dp_image_env.sh
 
-    export PYOPENGL_PLATFORM=egl
-    export MUJOCO_GL=egl
-
     python -m pip install -q wandb
-    python -m pip install -q bddl easydict cloudpickle
-    python -m pip install -q --no-deps gym_notices gym
 
     python -m scripts.train_sequential \\
       --config /workspace/configs/cl_object_pt.yaml \\
