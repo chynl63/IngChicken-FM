@@ -330,7 +330,7 @@ def main(cfg, pretrain_ckpt=None, start_task: int = 0):
         try:
             import wandb
             date_str = datetime.now().strftime("%m%d%H%M")
-            run_name = f"{wandb_cfg['name']}_{date_str}"
+            run_name = f"{wandb_cfg['name']}_train_{date_str}"
             wandb.init(
                 entity=wandb_cfg["entity"],
                 project=wandb_cfg["project"],

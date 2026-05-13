@@ -40,8 +40,8 @@ sbatch <<EOF
 #SBATCH --cpus-per-task=${CPU}
 #SBATCH --mem=${MEM}
 #SBATCH --time=${TIME}
-#SBATCH --output=${BASE}/logs/cl_obj_eval_${JOB_SUFFIX}_%j.out
-#SBATCH --error=${BASE}/logs/cl_obj_eval_${JOB_SUFFIX}_%j.err
+#SBATCH --output=${BASE}/logs/cl_obj_naive_eval_${JOB_SUFFIX}_%j.out
+#SBATCH --error=${BASE}/logs/cl_obj_naive_eval_${JOB_SUFFIX}_%j.err
 
 set -euo pipefail
 export CUDA_VISIBLE_DEVICES="\${GPU_DEVICE:-0}"
@@ -70,5 +70,5 @@ exec singularity exec --nv --writable-tmpfs \\
 EOF
 
 echo "Submitted: FM eval (LIBERO-Object, ${JOB_SUFFIX})"
-echo "  Logs:    ${BASE}/logs/cl_obj_eval_${JOB_SUFFIX}_<JOBID>.{out,err}"
+echo "  Logs:    ${BASE}/logs/cl_obj_naive_eval_${JOB_SUFFIX}_<JOBID>.{out,err}"
 echo "  Results: ${BASE}/results/cl_object_pt/"

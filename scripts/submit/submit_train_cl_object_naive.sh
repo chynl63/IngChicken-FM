@@ -33,8 +33,8 @@ sbatch <<EOF
 #SBATCH --cpus-per-task=${CPU}
 #SBATCH --mem=${MEM}
 #SBATCH --time=${TIME}
-#SBATCH --output=${BASE}/logs/cl_obj_naive_%j.out
-#SBATCH --error=${BASE}/logs/cl_obj_naive_%j.err
+#SBATCH --output=${BASE}/logs/cl_obj_naive_train_%j.out
+#SBATCH --error=${BASE}/logs/cl_obj_naive_train_%j.err
 
 set -euo pipefail
 export CUDA_VISIBLE_DEVICES="\${GPU_DEVICE:-0}"
@@ -57,6 +57,6 @@ exec singularity exec --nv --writable-tmpfs \\
 EOF
 
 echo "Submitted: FM naive CL training (LIBERO-Object)"
-echo "  Logs:        ${BASE}/logs/cl_obj_naive_<JOBID>.{out,err}"
+echo "  Logs:        ${BASE}/logs/cl_obj_naive_train_<JOBID>.{out,err}"
 echo "  Checkpoints: ${BASE}/checkpoints/cl_object_pt/"
 echo "  Results:     ${BASE}/results/cl_object_pt/"

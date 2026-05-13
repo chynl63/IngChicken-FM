@@ -89,7 +89,7 @@ def main(cfg, task_indices: list):
         try:
             import wandb
             date_str = datetime.now().strftime("%m%d%H%M")
-            run_name = f"{wandb_cfg['name']}_{date_str}"
+            run_name = f"{wandb_cfg['name']}_eval_{date_str}"
             wandb.init(
                 entity=wandb_cfg["entity"],
                 project=wandb_cfg["project"],
