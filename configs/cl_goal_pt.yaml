@@ -7,7 +7,7 @@ weights_dir: ""
 benchmark:
   name: "libero_goal"
   task_order_index: 0
-  data_root: "/workspace/data"
+  data_root: "/home/cyhoaoen/IngChicken-FM/data"
 
 data:
   obs_horizon: 2

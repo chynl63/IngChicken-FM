@@ -308,7 +308,7 @@ def train_on_task(
 # Main
 # ---------------------------------------------------------------------------
 
-def main(cfg, skip_eval=False, pretrain_ckpt=None):
+def main(cfg, skip_eval=False, pretrain_ckpt=None, start_task: int = 0):
     device = torch.device(cfg.get("device", "cuda"))
     seed = cfg.get("seed", 42)
     torch.manual_seed(seed)
@@ -321,9 +321,18 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
     run_dir, ckpt_dir, results_dir = _prepare_run_dirs(cfg)
     tb_writer = _init_tensorboard_writer(cfg, results_dir)
 
+    # Load resume checkpoint before wandb init to reuse saved run_id
+    resume_ckpt_data = None
+    if start_task > 0:
+        resume_ckpt_path = ckpt_dir / f"after_task_{start_task - 1:02d}_ema.pt"
+        if not resume_ckpt_path.exists():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_ckpt_path}")
+        resume_ckpt_data = torch.load(resume_ckpt_path, map_location=device, weights_only=False)
+        print(f"Resuming from: {resume_ckpt_path}  (start_task={start_task})")
+
     wandb_cfg = cfg.get("wandb", {})
     use_wandb = wandb_cfg.get("enabled", False)
-    wandb_run_id = None
+    wandb_run_id = resume_ckpt_data.get("wandb_run_id") if resume_ckpt_data else None
     if use_wandb:
         try:
             import wandb
@@ -336,7 +345,8 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
                 name=run_name,
                 tags=wandb_cfg.get("tags", []),
                 config=cfg,
-                resume=wandb_cfg.get("resume", "allow"),
+                resume="must" if wandb_run_id else wandb_cfg.get("resume", "allow"),
+                id=wandb_run_id if wandb_run_id else None,
             )
             wandb_run_id = wandb.run.id
             print(f"wandb run: {run_name}  (id={wandb_run_id})")
@@ -374,7 +384,11 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model parameters: {param_count:,}")
 
-    if pretrain_ckpt is not None:
+    if resume_ckpt_data is not None:
+        model.load_state_dict(resume_ckpt_data["model_state_dict"], strict=True)
+        cfg["training"]["_effective_lr"] = cfg["training"]["learning_rate"]
+        print(f"Model weights loaded from resume checkpoint.")
+    elif pretrain_ckpt is not None:
         print(f"\nLoading pretrained weights from: {pretrain_ckpt}")
         ckpt = torch.load(pretrain_ckpt, map_location=device, weights_only=False)
         model.load_state_dict(ckpt["model_state_dict"], strict=True)
@@ -388,10 +402,22 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
 
     perf_matrix = np.full((n_tasks, n_tasks), np.nan)
     training_log = []
-    tb_global_step = 0
+    tb_global_step = resume_ckpt_data.get("tb_global_step", 0) if resume_ckpt_data else 0
     low_dim_keys = [k for k in data_cfg["obs_keys"] if "image" not in k]
 
-    for task_k in range(n_tasks):
+    if start_task > 0:
+        inter_path = results_dir / "perf_matrix_intermediate.npy"
+        if inter_path.exists():
+            saved = np.load(inter_path)
+            perf_matrix[:saved.shape[0], :saved.shape[1]] = saved
+            print(f"Loaded perf_matrix from {inter_path}")
+        log_path = results_dir / "training_log.json"
+        if log_path.exists():
+            with open(log_path) as f:
+                training_log = json.load(f).get("training_log", [])
+            print(f"Loaded training_log ({len(training_log)} entries)")
+
+    for task_k in range(start_task, n_tasks):
         print("\n" + "=" * 70)
         print(f"STAGE {task_k + 1}/{n_tasks}: Task {task_k}  —  {task_names[task_k]}")
         print("=" * 70)
@@ -423,6 +449,7 @@ def main(cfg, skip_eval=False, pretrain_ckpt=None):
             "task_idx": task_k, "task_name": task_names[task_k],
             "config": cfg, "action_mean": action_mean, "action_std": action_std,
             "epoch_losses": epoch_losses, "wandb_run_id": wandb_run_id,
+            "tb_global_step": tb_global_step,
         }
         _save_checkpoint(ckpt_path, payload, model, ema, use_ema=False)
         _save_checkpoint(ema_ckpt_path, payload, model, ema, use_ema=True)
@@ -531,7 +558,10 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, required=True)
     parser.add_argument("--skip-eval", action="store_true")
     parser.add_argument("--pretrain-ckpt", type=str, default=None)
+    parser.add_argument("--start-task", type=int, default=0,
+                        help="Resume from this task index (loads after_task_{N-1}_ema.pt)")
     args = parser.parse_args()
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
-    main(cfg, skip_eval=args.skip_eval, pretrain_ckpt=args.pretrain_ckpt)
+    main(cfg, skip_eval=args.skip_eval, pretrain_ckpt=args.pretrain_ckpt,
+         start_task=args.start_task)
