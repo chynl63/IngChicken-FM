@@ -56,6 +56,9 @@ exec singularity exec --nv --writable-tmpfs \\
     cd /workspace
     source /workspace/scripts/singularity/dp_image_env.sh
 
+    export MUJOCO_GL=osmesa
+    export PYOPENGL_PLATFORM=osmesa
+
     python -m pip install -q wandb
     python -m pip install -q bddl easydict cloudpickle
     python -m pip install -q --no-deps gym_notices gym
