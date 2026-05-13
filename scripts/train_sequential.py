@@ -282,8 +282,8 @@ def train_on_task(
             if use_wandb and global_step % log_cfg.get("log_interval", 50) == 0:
                 import wandb as _wandb
                 _wandb.log({
-                    "train/loss": loss_val,
-                    "train/lr": scheduler.get_last_lr()[0],
+                    f"train/task{task_idx}/loss": loss_val,
+                    f"train/task{task_idx}/lr": scheduler.get_last_lr()[0],
                 }, step=tb_global_step_offset + global_step)
             if tb_writer and global_step % log_cfg.get("log_interval", 50) == 0:
                 tb_step = tb_global_step_offset + global_step
@@ -338,7 +338,7 @@ def main(cfg, pretrain_ckpt=None, start_task: int = 0):
                 name=run_name,
                 tags=wandb_cfg.get("tags", []),
                 config=cfg,
-                resume="must" if wandb_run_id else wandb_cfg.get("resume", "allow"),
+                resume="must" if wandb_run_id else "never",
                 id=wandb_run_id if wandb_run_id else None,
             )
             wandb_run_id = wandb.run.id
