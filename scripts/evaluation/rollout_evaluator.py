@@ -226,6 +226,7 @@ def evaluate_policy_on_task(
     video_episodes_to_save: int = 1,
     video_camera_key: str = "agentview_image",
 ) -> tuple:
+    import mujoco  # pre-load mujoco.egl into sys.modules before PYOPENGL_PLATFORM is set
     os.environ.setdefault("MUJOCO_GL", "osmesa")
     os.environ.setdefault("PYOPENGL_PLATFORM", "osmesa")
 
