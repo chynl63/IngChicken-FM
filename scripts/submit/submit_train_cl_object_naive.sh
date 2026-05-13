@@ -42,6 +42,7 @@ export CUDA_VISIBLE_DEVICES="\${GPU_DEVICE:-0}"
 exec singularity exec --nv --writable-tmpfs \\
   --bind ${BASE}:/workspace \\
   --bind /home/cyhoaoen:/home/cyhoaoen \\
+  --bind /home/cyhoaoen/openvla/LIBERO:/workspace/LIBERO \\
   "${SIF_IMAGE}" \\
   bash -lc '
     set -euo pipefail
