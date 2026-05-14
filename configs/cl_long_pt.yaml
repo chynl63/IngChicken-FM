@@ -55,7 +55,7 @@ training:
 
 evaluation:
   num_episodes: 20
-  max_steps_per_episode: 1000
+  max_steps_per_episode: 600
   action_execution_horizon: 8
   num_flow_steps: 10
   save_video: false

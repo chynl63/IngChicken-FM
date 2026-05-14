@@ -355,7 +355,13 @@ def evaluate_policy_on_task(
 
             for t in range(exec_horizon):
                 action = pred_actions[t]
-                obs, _, done, info = env.step(action)
+                try:
+                    obs, _, done, info = env.step(action)
+                except ValueError:
+                    # LIBERO masks robosuite's done=True (horizon timeout) as done=False,
+                    # so the env can appear live while internally terminated.
+                    steps_taken = max_steps  # force outer while to exit
+                    break
                 steps_taken += 1
 
                 if video_writer is not None:
