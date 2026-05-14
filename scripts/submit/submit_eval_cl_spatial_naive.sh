@@ -14,7 +14,7 @@ set -euo pipefail
 BASE="/home/cyhoaoen/IngChicken-FM"
 SIF_IMAGE="${SIF_IMAGE:-/home/cyhoaoen/IngChicken/Baseline/chaeyoon/dp_libero.sif}"
 PARTITION="${PARTITION:-gigabyte_a5000}"
-TIME="${TIME:-8:00:00}"
+TIME="${TIME:-24:00:00}"
 CPU="${CPU:-8}"
 MEM="${MEM:-32G}"
 GPU_TYPE="${GPU_TYPE:-A5000}"
