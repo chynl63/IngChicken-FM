@@ -5,7 +5,7 @@ device: "cuda"
 weights_dir: ""
 
 benchmark:
-  name: "libero_long"
+  name: "libero_10"
   task_order_index: 0
   data_root: "/workspace/data"
 
