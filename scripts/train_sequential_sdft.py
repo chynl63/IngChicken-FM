@@ -292,7 +292,11 @@ def train_on_task(
         obs_keys=data_cfg["obs_keys"], use_eye_in_hand=data_cfg.get("use_eye_in_hand", True),
         image_size=tuple(data_cfg.get("image_size", [128, 128])),
     )
+    configured_steps_per_epoch = train_cfg.get("steps_per_epoch")
+    steps_per_epoch = int(configured_steps_per_epoch) if configured_steps_per_epoch else len(loader)
     print(f"  Dataset: {len(dataset)} samples, {len(loader)} batches/epoch")
+    if configured_steps_per_epoch:
+        print(f"  Steps/epoch: {steps_per_epoch}")
     if sdft_enabled:
         print(f"  FM-SDFT: ON  (weight={sdft_weight}, steps={sdft_num_steps}, "
               f"sdft_bs={sdft_batch_size}, n_states={len(sdft_collected)})")
@@ -304,7 +308,7 @@ def train_on_task(
         model.parameters(), lr=lr, weight_decay=train_cfg.get("weight_decay", 1e-6)
     )
 
-    total_steps = epochs * len(loader)
+    total_steps = epochs * steps_per_epoch
     warmup_steps = train_cfg.get("lr_warmup_steps", 500)
 
     def lr_lambda(step):
@@ -328,8 +332,15 @@ def train_on_task(
             teacher.eval()
         batch_losses = []
 
-        pbar = tqdm(loader, desc=f"  Task {task_idx} | Epoch {epoch+1}/{epochs}", leave=False)
-        for batch in pbar:
+        if configured_steps_per_epoch:
+            batch_iter = cycle(loader)
+            pbar = tqdm(range(steps_per_epoch), desc=f"  Task {task_idx} | Epoch {epoch+1}/{epochs}", leave=False)
+        else:
+            batch_iter = iter(loader)
+            pbar = tqdm(batch_iter, desc=f"  Task {task_idx} | Epoch {epoch+1}/{epochs}", leave=False)
+
+        for _ in pbar:
+            batch = next(batch_iter) if configured_steps_per_epoch else _
             batch = {k: v.to(device) for k, v in batch.items()}
             if replay_iterator is not None:
                 replay_batch = next(replay_iterator)
