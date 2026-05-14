@@ -1,56 +1,44 @@
-FROM nvidia/cuda:11.3.1-cudnn8-runtime-ubuntu20.04
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    MUJOCO_GL=egl \
-    PYOPENGL_PLATFORM=egl \
-    LIBERO_CONFIG_PATH=/workspace/.libero
+    PIP_NO_CACHE_DIR=1 \
+    MUJOCO_GL=osmesa \
+    PYOPENGL_PLATFORM=osmesa \
+    LIBERO_CONFIG_PATH=/workspace/.libero \
+    PYTHONPATH=/workspace/LIBERO
 
 SHELL ["/bin/bash", "-lc"]
-
 WORKDIR /workspace
 
-COPY requirements.txt /workspace/requirements.txt
-COPY LIBERO /workspace/LIBERO
-
-# `robomimic` pulls in `egl_probe`, which builds a native extension via CMake.
-# Install LIBERO from the local checkout under `/workspace/LIBERO` so the
-# container follows the same editable workflow used during development.
-# Debian's python/pip here writes legacy editable metadata under
-# `/usr/lib/python3.8/site-packages`, but the runtime python import path comes
-# from `/usr/local/lib/python3.8/dist-packages`. We therefore also register the
-# repo root via a `.pth` file in the runtime-visible site directory.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    python3-dev \
     python3-setuptools \
     build-essential \
     cmake \
     git \
     tmux \
+    ffmpeg \
     libglib2.0-0 \
     libgl1-mesa-glx \
     libglfw3 \
-    libglew2.1 \
+    libglew2.2 \
     libosmesa6 \
     libsm6 \
     libxext6 \
     libxrender1 \
-    ffmpeg \
  && rm -rf /var/lib/apt/lists/* \
- && ln -sf /usr/bin/python3 /usr/local/bin/python \
- && python -m pip install --no-cache-dir --upgrade "pip<25" "setuptools<70" wheel \
- && python -m pip install --no-cache-dir -r /workspace/requirements.txt \
- && python -c 'from pathlib import Path; Path("/workspace/LIBERO/libero/__init__.py").write_text("# Added during Docker build to make local LIBERO editable install work.\n", encoding="utf-8")' \
- && mkdir -p "${LIBERO_CONFIG_PATH}" \
- && python -c 'from pathlib import Path; import os, yaml; root = Path("/workspace/LIBERO/libero/libero"); cfg = {"benchmark_root": str(root), "bddl_files": str(root / "bddl_files"), "init_states": str(root / "init_files"), "datasets": str(root.parent / "datasets"), "assets": str(root / "assets")}; Path(os.environ["LIBERO_CONFIG_PATH"]).joinpath("config.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")' \
- && python -c 'import site; from pathlib import Path; runtime_site = next(Path(p) for p in site.getsitepackages() if p.startswith("/usr/local")); runtime_site.joinpath("libero_local.pth").write_text("/workspace/LIBERO\n", encoding="utf-8")'
-  
-RUN cd /workspace/LIBERO \
- && python -m pip install --no-cache-dir -e . \
- && cd /workspace \
- && python -c 'import libero; from libero.libero.benchmark import get_benchmark; benchmark = get_benchmark("libero_object")(task_order_index=0); print(f"LIBERO install ok ({benchmark.get_num_tasks()} tasks)")'
+ && ln -sf /usr/bin/python3 /usr/local/bin/python
+
+COPY requirements.txt .
+RUN python -m pip install --upgrade pip setuptools wheel \
+ && python -m pip install -r requirements.txt
+
+COPY LIBERO ./LIBERO
+RUN python -m pip install -e /workspace/LIBERO
 
 CMD ["bash"]

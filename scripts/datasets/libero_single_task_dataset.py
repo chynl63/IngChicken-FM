@@ -14,6 +14,7 @@ from torch.utils.data import (
     ConcatDataset,
     DataLoader,
     Dataset,
+    RandomSampler,
     Subset,
     WeightedRandomSampler,
 )
@@ -188,6 +189,7 @@ def create_single_task_dataloader(
     action_horizon: int = 16,
     action_mean: Optional[np.ndarray] = None,
     action_std: Optional[np.ndarray] = None,
+    samples_per_epoch: Optional[int] = None,
     **dataset_kwargs,
 ) -> Tuple[DataLoader, SingleTaskDataset]:
     dataset = SingleTaskDataset(
@@ -205,10 +207,21 @@ def create_single_task_dataloader(
     except RuntimeError:
         can_pin = False
 
+    sampler = None
+    shuffle = True
+    if samples_per_epoch is not None:
+        sampler = RandomSampler(
+            dataset,
+            replacement=True,
+            num_samples=int(samples_per_epoch),
+        )
+        shuffle = False
+
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=True,
+        sampler=sampler,
+        shuffle=shuffle,
         num_workers=num_workers,
         pin_memory=can_pin,
         persistent_workers=num_workers > 0,
