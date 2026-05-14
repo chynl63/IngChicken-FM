@@ -1,65 +1,64 @@
 # Unified environment for:
-# 1) LIBERO official requirements.txt + README install pins
-# 2) diffusion_policy official conda_environment.yaml
-# 3) this repo's direct imports (PyYAML, h5py, tqdm, huggingface_hub)
+# 1) LIBERO runtime
+# 2) Flow Matching / SDFT training scripts
+# 3) checkpoints saved with newer torch + NumPy pickles
 #
-# Conflict policy:
-# - When LIBERO and diffusion_policy disagree on the core robotics stack,
-#   prefer LIBERO's official pins because this repo imports LIBERO directly
-#   and reimplements diffusion_policy locally.
-# - diffusion_policy-only packages are kept at the versions pinned in its
-#   official conda environment where they do not conflict with LIBERO.
+# This environment intentionally moves off the original LIBERO torch==1.11 /
+# numpy==1.22 stack.  The pretrain checkpoint in this repo references
+# numpy._core, which requires NumPy 2.x, and the training scripts use
+# torch.load(..., weights_only=False), which requires a newer PyTorch.
 
---extra-index-url https://download.pytorch.org/whl/cu113
+--extra-index-url https://download.pytorch.org/whl/cu121
 
-# Core stack: pinned to LIBERO official install
-torch==1.11.0+cu113
-torchvision==0.12.0+cu113
-torchaudio==0.11.0
-hydra-core==1.2.0
-numpy==1.22.4
-wandb==0.13.1
-easydict==1.9
-transformers==4.21.1
-opencv-python==4.6.0.66
+# Core stack: Python 3.10 + CUDA 12.1 wheels
+torch==2.4.1+cu121
+torchvision==0.19.1+cu121
+torchaudio==2.4.1+cu121
+numpy==2.0.2
+
+# LIBERO / robotics stack
+hydra-core==1.3.2
+wandb==0.26.1
+easydict==1.13
+transformers==4.44.2
+opencv-python==4.10.0.84
 robomimic==0.2.0
 robosuite==1.4.0
-# Python 3.8-compatible MuJoCo pin for the current Docker base image.
 mujoco==3.2.3
-einops==0.4.1
+einops==0.8.0
 thop==0.1.1.post2209072238
 bddl==1.0.1
-future==0.18.2
-matplotlib==3.5.3
-cloudpickle==2.1.0
+future==1.0.0
+matplotlib==3.9.2
+cloudpickle==3.0.0
 gym==0.25.2
 
 # Local repo requirements
-h5py==3.7.0
-PyYAML==6.0.1
-tqdm==4.64.1
+h5py==3.11.0
+PyYAML==6.0.2
+tqdm==4.66.5
 huggingface_hub==0.24.7
 
-# diffusion_policy core additions
-numba==0.56.4
-scipy==1.9.1
-cffi==1.15.1
-zarr==2.12.0
-numcodecs==0.10.2
-dill==0.3.5.1
+# diffusion_policy core additions, bumped where NumPy 2 compatibility matters
+numba==0.60.0
+scipy==1.13.1
+cffi==1.17.1
+zarr==2.18.3
+numcodecs==0.13.1
+dill==0.3.8
 scikit-video==1.1.11
-scikit-image==0.19.3
-threadpoolctl==3.1.0
-shapely==1.8.4
-cython==0.29.32
-imageio==2.22.0
-imageio-ffmpeg==0.4.7
-termcolor==2.0.1
-tensorboard==2.10.1
-tensorboardx==2.5.1
-psutil==5.9.2
-click==8.0.4
-boto3==1.24.96
-accelerate==0.13.2
-datasets==2.6.1
-diffusers==0.11.1
+scikit-image==0.24.0
+threadpoolctl==3.5.0
+shapely==2.0.6
+cython==3.0.11
+imageio==2.35.1
+imageio-ffmpeg==0.5.1
+termcolor==2.4.0
+tensorboard==2.17.1
+tensorboardx==2.6.2.2
+psutil==6.0.0
+click==8.1.7
+boto3==1.35.24
+accelerate==0.34.2
+datasets==2.21.0
+diffusers==0.30.3
