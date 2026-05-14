@@ -7,7 +7,7 @@ weights_dir: ""
 benchmark:
   name: "libero_spatial"
   task_order_index: 0
-  data_root: "/home/cyhoaoen/IngChicken-FM/data"
+  data_root: "/home/yerincho04/ing-chicken/cl_diffusion_ER/data"
 
 data:
   obs_horizon: 2
