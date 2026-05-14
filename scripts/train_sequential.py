@@ -354,9 +354,11 @@ def main(cfg, pretrain_ckpt=None, start_task: int = 0):
             import wandb
             date_str = datetime.now().strftime("%m%d%H%M")
             run_name = f"{wandb_cfg['name']}_train_{date_str}"
+            use_fixed_steps = cfg.get("training", {}).get("steps_per_epoch") is not None
+            wandb_project = wandb_cfg["project"] + ("-step" if use_fixed_steps else "")
             wandb.init(
                 entity=wandb_cfg["entity"],
-                project=wandb_cfg["project"],
+                project=wandb_project,
                 group=wandb_cfg.get("group"),
                 name=run_name,
                 tags=wandb_cfg.get("tags", []),
