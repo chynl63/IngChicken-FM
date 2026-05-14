@@ -299,12 +299,27 @@ def evaluate_policy_on_task(
             f"    Episode {ep+1:02d}/{num_episodes}: warmup {LIBERO_EVAL_WARMUP_STEPS} step(s)",
             flush=True,
         )
+        warmup_done = False
         for _ in range(LIBERO_EVAL_WARMUP_STEPS):
-            obs, _, _, _ = env.step(zero_action)
+            obs, _, warmup_done, _ = env.step(zero_action)
             if video_writer is not None:
                 frame = _get_video_frame(obs, video_camera_key)
                 if frame is not None:
                     video_writer.append_data(frame)
+            if warmup_done:
+                break
+
+        if warmup_done:
+            successes.append(False)
+            print(
+                f"    Episode {ep+1:02d}/{num_episodes}: FAIL (env terminated during warmup)",
+                flush=True,
+            )
+            if video_writer is not None:
+                video_writer.close()
+                if video_path is not None:
+                    print(f"    Saved video: {video_path}")
+            continue
 
         print(f"    Episode {ep+1:02d}/{num_episodes}: policy rollout", flush=True)
         obs_buffer = collections.deque(maxlen=obs_horizon)
