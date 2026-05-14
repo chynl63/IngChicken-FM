@@ -200,6 +200,11 @@ def train_on_task(
     current_batch_size = data_cfg["batch_size"]
     replay_batch_size = 0
     replay_iterator = None
+    configured_steps_per_epoch = train_cfg.get("steps_per_epoch")
+    use_configured_steps = configured_steps_per_epoch is not None
+    steps_per_epoch = int(configured_steps_per_epoch) if use_configured_steps else None
+    if use_configured_steps and steps_per_epoch <= 0:
+        raise ValueError("training.steps_per_epoch must be a positive integer")
 
     if replay_memory is not None and replay_memory.has_samples():
         mix_ratio = float(replay_cfg.get("mix_ratio", 0.5))
@@ -225,12 +230,13 @@ def train_on_task(
         obs_keys=data_cfg["obs_keys"],
         use_eye_in_hand=data_cfg.get("use_eye_in_hand", True),
         image_size=tuple(data_cfg.get("image_size", [128, 128])),
+        samples_per_epoch=steps_per_epoch * current_batch_size if use_configured_steps else None,
     )
-    configured_steps_per_epoch = train_cfg.get("steps_per_epoch")
-    steps_per_epoch = int(configured_steps_per_epoch) if configured_steps_per_epoch else len(loader)
+    if not use_configured_steps:
+        steps_per_epoch = len(loader)
     print(f"  Dataset: {len(dataset)} samples, {len(loader)} batches/epoch")
-    if configured_steps_per_epoch:
-        print(f"  Steps/epoch: {steps_per_epoch}")
+    if use_configured_steps:
+        print(f"  Steps/epoch: {steps_per_epoch} (random replacement sampling)")
 
     lr = train_cfg.get("_effective_lr", train_cfg["learning_rate"])
     optimizer = torch.optim.AdamW(
@@ -257,7 +263,7 @@ def train_on_task(
     for epoch in range(epochs):
         model.train()
         batch_losses = []
-        if configured_steps_per_epoch:
+        if use_configured_steps:
             batch_iter = cycle(loader)
             pbar = tqdm(range(steps_per_epoch), desc=f"  Task {task_idx} | Epoch {epoch+1}/{epochs}", leave=False)
         else:
@@ -265,7 +271,7 @@ def train_on_task(
             pbar = tqdm(batch_iter, desc=f"  Task {task_idx} | Epoch {epoch+1}/{epochs}", leave=False)
 
         for _ in pbar:
-            batch = next(batch_iter) if configured_steps_per_epoch else _
+            batch = next(batch_iter) if use_configured_steps else _
             batch = {k: v.to(device) for k, v in batch.items()}
             if replay_iterator is not None:
                 replay_batch = next(replay_iterator)

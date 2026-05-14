@@ -7,7 +7,7 @@ weights_dir: ""
 benchmark:
   name: "libero_spatial"
   task_order_index: 0
-  data_root: "/home/cyhoaoen/IngChicken-FM/data"
+  data_root: "/workspace/data"
 
 data:
   obs_horizon: 2
@@ -46,6 +46,7 @@ continual_learning:
 training:
   learning_rate: 1.0e-4
   finetune_learning_rate: 1.0e-4
+  steps_per_epoch: 110
   weight_decay: 1.0e-6
   lr_warmup_steps: 500
   ema_decay: 0.995

@@ -40,6 +40,7 @@ unet:
 training:
   num_epochs: 500
   learning_rate: 1.0e-4
+  steps_per_epoch: 110
   weight_decay: 1.0e-6
   lr_scheduler: "cosine"
   lr_warmup_steps: 500
