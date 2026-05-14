@@ -82,7 +82,7 @@ def main(cfg, task_indices: list):
     use_wandb = wandb_cfg.get("enabled", False)
     wandb_run_id = None
     if use_wandb:
-        first_ckpt = ckpt_dir / f"after_task_{task_indices[0]:02d}_ema.pt"
+        first_ckpt = ckpt_dir / f"after_task_{task_indices[0]:02d}.pt"
         if first_ckpt.exists():
             meta = torch.load(first_ckpt, map_location="cpu", weights_only=False)
             wandb_run_id = meta.get("wandb_run_id")
@@ -106,7 +106,7 @@ def main(cfg, task_indices: list):
             use_wandb = False
 
     for task_k in task_indices:
-        ckpt_path = ckpt_dir / f"after_task_{task_k:02d}_ema.pt"
+        ckpt_path = ckpt_dir / f"after_task_{task_k:02d}.pt"
         if not ckpt_path.exists():
             print(f"[skip] Checkpoint not found: {ckpt_path}")
             continue
@@ -195,12 +195,12 @@ if __name__ == "__main__":
     if args.all:
         ckpt_dir = Path(cfg["logging"]["checkpoint_dir"])
         available = []
-        for p in sorted(ckpt_dir.glob("after_task_*_ema.pt")):
-            m = re.match(r"after_task_(\d+)_ema", p.stem)
+        for p in sorted(ckpt_dir.glob("after_task_*.pt")):
+            m = re.match(r"after_task_(\d+)$", p.stem)
             if m:
                 available.append(int(m.group(1)))
         if not available:
-            raise FileNotFoundError(f"No after_task_*_ema.pt checkpoints found in {ckpt_dir}")
+            raise FileNotFoundError(f"No after_task_*.pt checkpoints found in {ckpt_dir}")
         task_indices = available
     elif args.tasks:
         task_indices = sorted(args.tasks)
