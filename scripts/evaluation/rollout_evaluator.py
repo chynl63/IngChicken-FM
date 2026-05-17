@@ -223,7 +223,6 @@ def evaluate_policy_on_task(
     save_video: bool = False,
     video_dir: str = None,
     video_fps: int = 20,
-    video_episodes_to_save: int = 1,
     video_camera_key: str = "agentview_image",
 ) -> tuple:
     os.environ.setdefault("MUJOCO_GL", "osmesa")
@@ -271,13 +270,13 @@ def evaluate_policy_on_task(
 
     model.eval()
     successes = []
+    success_video_saved = 0
 
     for ep in range(num_episodes):
         print(f"    Episode {ep+1:02d}/{num_episodes}: reset", flush=True)
         video_writer = None
         video_path = None
-        should_save_video = save_video and ep < max(video_episodes_to_save, 0)
-        if should_save_video:
+        if save_video:
             import imageio.v2 as imageio
 
             video_name = (
@@ -317,8 +316,7 @@ def evaluate_policy_on_task(
             )
             if video_writer is not None:
                 video_writer.close()
-                if video_path is not None:
-                    print(f"    Saved video: {video_path}")
+                print(f"    Saved video (fail): {video_path}")
             continue
 
         print(f"    Episode {ep+1:02d}/{num_episodes}: policy rollout", flush=True)
@@ -392,8 +390,14 @@ def evaluate_policy_on_task(
 
         if video_writer is not None:
             video_writer.close()
-            if video_path is not None:
-                print(f"    Saved video: {video_path}")
+            keep = (not episode_success) or (episode_success and success_video_saved == 0)
+            if keep:
+                if episode_success:
+                    success_video_saved += 1
+                label = "success" if episode_success else "fail"
+                print(f"    Saved video ({label}): {video_path}")
+            else:
+                video_path.unlink(missing_ok=True)
 
     env.close()
 
@@ -421,7 +425,6 @@ def evaluate_checkpoint_on_all_tasks(
     save_video: bool = False,
     video_dir: str = None,
     video_fps: int = 20,
-    video_episodes_to_save: int = 1,
     video_camera_key: str = "agentview_image",
 ) -> dict:
     results = {}
@@ -450,7 +453,6 @@ def evaluate_checkpoint_on_all_tasks(
             save_video=save_video,
             video_dir=video_dir,
             video_fps=video_fps,
-            video_episodes_to_save=video_episodes_to_save,
             video_camera_key=video_camera_key,
         )
         results[task_idx] = sr
