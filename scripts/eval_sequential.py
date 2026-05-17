@@ -84,7 +84,7 @@ def main(cfg, task_indices: list):
     if use_wandb:
         first_ckpt = ckpt_dir / f"after_task_{task_indices[0]:02d}.pt"
         if first_ckpt.exists():
-            meta = torch.load(first_ckpt, map_location="cpu", weights_only=False)
+            meta = torch.load(first_ckpt, map_location="cpu")
             wandb_run_id = meta.get("wandb_run_id")
         try:
             import wandb
@@ -121,7 +121,7 @@ def main(cfg, task_indices: list):
         print(f"EVAL after task {task_k}: {task_names[task_k]}")
         print(f"{'='*70}")
 
-        ckpt_data = torch.load(ckpt_path, map_location=device, weights_only=False)
+        ckpt_data = torch.load(ckpt_path, map_location=device)
         model = FlowPolicy(cfg).to(device)
         model.load_state_dict(ckpt_data["model_state_dict"], strict=True)
         model.eval()

@@ -226,8 +226,8 @@ def evaluate_policy_on_task(
     video_episodes_to_save: int = 1,
     video_camera_key: str = "agentview_image",
 ) -> tuple:
-    os.environ.setdefault("MUJOCO_GL", "osmesa")
-    os.environ.setdefault("PYOPENGL_PLATFORM", "osmesa")
+    os.environ["MUJOCO_GL"] = "osmesa"
+    os.environ["PYOPENGL_PLATFORM"] = "osmesa"
 
     if "NUMBA_CACHE_DIR" not in os.environ:
         cache_dir = "/tmp/numba_cache"

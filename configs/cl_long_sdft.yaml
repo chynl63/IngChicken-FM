@@ -5,9 +5,9 @@ device: "cuda"
 weights_dir: ""
 
 benchmark:
-  name: "libero_long"
+  name: "libero_10"
   task_order_index: 0
-  data_root: "/workspace/data"
+  data_root: "/home/yerincho04/ing-chicken/cl_diffusion_ER/data"
 
 data:
   obs_horizon: 2
