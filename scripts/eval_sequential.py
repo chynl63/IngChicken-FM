@@ -126,6 +126,8 @@ def main(cfg, task_indices: list):
         model.load_state_dict(ckpt_data["model_state_dict"], strict=True)
         model.eval()
 
+        save_video = eval_cfg.get("save_video", False)
+        video_dir = str(results_dir / "videos" / f"after_task_{task_k:02d}") if save_video else None
         eval_results = evaluate_checkpoint_on_all_tasks(
             model=model, benchmark=benchmark,
             task_indices=list(range(task_k + 1)),
@@ -141,6 +143,8 @@ def main(cfg, task_indices: list):
             use_ddim=False,
             ddim_steps=eval_cfg.get("num_flow_steps", 10),
             seed=seed,
+            save_video=save_video,
+            video_dir=video_dir,
         )
         del model
 
